@@ -1,6 +1,7 @@
 using KnowledgeCapture.Core.Models;
 using KnowledgeCapture.Core.Services;
 using KnowledgeCapture.Core.Services.Anonymization;
+using KnowledgeCapture.Core.Services.Speech;
 using KnowledgeCapture.ViewModels;
 
 namespace KnowledgeCapture;
@@ -10,6 +11,7 @@ public static class AppHost
 {
     public static AppSettings Settings { get; } = AppSettings.Load();
     public static LlmService Llm { get; } = new();
+    public static SpeechService Speech { get; } = new();
     public static Anonymizer Anonymizer { get; } =
         new(Settings.Anonymization, new LlmEntityRecognizer(Llm, Settings.Anonymization.NerChunkChars));
 

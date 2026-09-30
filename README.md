@@ -16,6 +16,7 @@ anonymized text with the `<PERSON_1>`-style placeholders highlighted.
 | .NET SDK 8 or newer + .NET 8 runtime | SDK 10.0.401 building `net8.0` |
 | Foundry Local **0.10+** | 0.10.3 — `winget install Microsoft.FoundryLocal` (0.7 is also supported for discovery) |
 | An NPU chat model in the Foundry cache | `phi-4-mini-instruct-openvino-npu:1` (Intel). On Snapdragon: `foundry model list --device npu` |
+| Optional, for voice answers: a Whisper model + a microphone | `whisper-small` (`openai-whisper-small-generic-cpu:4`, 438 MB, CPU). `run.ps1` downloads it |
 
 Model choice: the playbook default is `phi-3.5-mini`, but **Foundry offers no NPU build of phi-3.5-mini on this device**,
 so the app ships with `"Model": "phi-4-mini"` (the only NPU chat model in the catalog here; it is also better at one-question
@@ -25,7 +26,7 @@ replies and JSON). The app is **NPU-strict** (`"Device": "npu"`): it refuses GPU
 
 ```powershell
 foundry model download phi-4-mini-instruct-openvino-npu:1   # once (≈3.6 GB); pick the NPU variant for your device
-.\run.ps1                                                    # starts Foundry, loads the NPU model, runs the app
+.\run.ps1                                                    # starts Foundry, loads the NPU + Whisper models, runs the app
 .\run.ps1 -Release
 ```
 
@@ -51,6 +52,33 @@ Publish a self-contained exe: `dotnet publish App\App.csproj -c Release -p:Platf
 | `Anonymization.Projects` / `Clients` | Deny-list (internal project and client names) → `<PROJECT_n>` / `<CLIENT_n>`. |
 | `Anonymization.KeepTerms` | Tool/product names that are never anonymized (SAP, Excel, Jira…). Add your tools here. |
 | `Anonymization.CapitalizedNameFallback` | Deterministic proper-noun safety net (default **on**, see below). |
+| `Speech.Enabled` / `Model` | Voice answers on/off; Whisper alias or variant id (`whisper-tiny` is faster, `whisper-small` default, `whisper-large-v3-turbo` most accurate). |
+| `Speech.Language` | Default spoken language: `auto`, `en`, `ro`, … (also switchable next to the example buttons). |
+| `Speech.MaxSeconds` / `ChunkSeconds` | A recording stops by itself after 90 s; it is split into ≤ 28 s pieces for Whisper. |
+
+## Voice answers (Whisper)
+
+The employee can **speak** an answer instead of typing it: **Speak** (or Ctrl+M) → talk → **Done**. The text lands in
+the answer box for a quick review and is sent like a typed answer, so it goes through the same anonymization and storage
+path. **Stop** throws a recording away.
+
+* **Model / runtime:** Whisper through Foundry Local (`foundry transcribe -m <model> -f <wav> -o json`). Foundry 0.10
+  ships Whisper as **CPU** builds only and does not serve it over its REST API (`/v1/audio/transcriptions` returns 404),
+  so the app calls the CLI, which hands the audio to the running daemon where the model stays loaded. The chat model keeps
+  the NPU to itself.
+* **Capture:** NAudio (WinMM) records 16 kHz mono 16-bit **into memory**, with a live level meter. The full recording is
+  never written to disk.
+* **Deterministic audio work in C#** (`WavAudio`): leading/trailing silence is trimmed; recordings without speech are
+  rejected without calling Whisper (Whisper invents text on silence); a blocked microphone (all-zero samples) gets its own
+  hint; quiet audio is amplified (≤ 8×). Whisper hears **30 s at a time**, so longer answers are split into ≤ 28 s pieces
+  at the quietest point near each limit and the texts are joined. Non-speech markers (`[BLANK_AUDIO]`, `(music)`) and known
+  silence hallucinations ("Thanks for watching!") are removed.
+* **Privacy:** each piece is written with a random name to `%TEMP%\KnowledgeCapture-audio`, then **overwritten with
+  zeros and deleted** right after its transcription (and leftovers are wiped at startup). Transcripts are never logged.
+  Foundry's own log records the file name and language, not the text. The folder is under `%TEMP%` because Foundry Local
+  is an MSIX app and cannot see files in `%LOCALAPPDATA%` (its AppData view is virtualized).
+* **Speed** (Snapdragon X Elite, `whisper-small` on CPU): 8 s answer → 2.2 s; 59 s answer → 3 pieces, 7.6 s
+  (≈ 4-8× real time).
 
 ## Architecture
 
@@ -62,6 +90,7 @@ App.Core/            net8.0 class library — everything testable, no UI
   Services/Anonymization/*       deterministic recognizers, LLM recognizer, proper-noun safety net, placeholder map, pipeline
   Services/ConversationStore.cs  SQLite (Microsoft.Data.Sqlite) — accepts only AnonText
   Services/ExportService.cs      chat-format JSONL
+  Services/Speech/*              mic capture (NAudio, in memory), WAV helpers + splitting, Whisper via `foundry transcribe`
 App/                 WinUI 3 (unpackaged, Mica, MVVM Toolkit): Views (XAML) → ViewModels → App.Core
 App.SelfTest/        headless check path used by leakcheck.ps1 (same App.Core code the UI runs)
 ```
@@ -208,6 +237,9 @@ language, fewer/lower-temperature rolling summaries, and the fix to the resume-n
   summaries of summaries can drop details (tools are kept deterministically).
 * The same person in a *resumed* conversation gets a new placeholder number — by design, since the mapping is gone.
 * First NPU load of a model can take tens of seconds; the app shows "Loading model on NPU…" meanwhile.
+* **Whisper runs on the CPU**, not the NPU: Foundry 0.10 has no NPU Whisper build. Accuracy depends on the model size;
+  `whisper-small` handles English well, Romanian is usable but less accurate (use `whisper-large-v3-turbo` if accuracy
+  matters more than speed). Names can be misspelled, which the anonymizer may then miss; review the text before sending.
 
 ## Troubleshooting
 
@@ -216,3 +248,6 @@ language, fewer/lower-temperature rolling summaries, and the fix to the resume-n
   active; typically a staged NPU driver update is waiting for a **Windows restart**.
 * **Foundry 0.10 renamed `foundry service` to `foundry server`**; the app supports both.
 * Runtime down during a chat → red pill + InfoBar with **Retry**; the unsent answer stays in the input box.
+* **Voice: "Voice answers unavailable"** → `foundry model download whisper-small`, then **Retry** in that InfoBar.
+* **Voice: "The microphone delivered no sound"** → Settings › Privacy & security › Microphone › turn on "Let desktop
+  apps access your microphone", and check the input device isn't muted.

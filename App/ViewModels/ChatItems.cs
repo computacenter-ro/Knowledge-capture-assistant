@@ -12,6 +12,12 @@ public partial class MessageItem : ObservableObject
     [ObservableProperty] public partial string Badge { get; set; } = "";
 }
 
+/// <summary>Spoken language offered to Whisper ("auto" = detect).</summary>
+public sealed record VoiceLanguage(string Code, string Label)
+{
+    public override string ToString() => Label;
+}
+
 /// <summary>One row of the "What gets stored" panel: the anonymized text exactly as written to SQLite.</summary>
 public partial class StoredItem : ObservableObject
 {

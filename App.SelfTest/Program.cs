@@ -6,7 +6,7 @@ namespace KnowledgeCapture.SelfTest;
 
 /// <summary>
 /// Headless check path. Usage:
-///   KnowledgeCapture.SelfTest [--offline] [--data-dir DIR] [--export FILE.jsonl]
+///   KnowledgeCapture.SelfTest [--offline | --speech-only] [--data-dir DIR] [--export FILE.jsonl]
 ///   KnowledgeCapture.SelfTest --print-pii        (prints the synthetic demo PII values for leakcheck.ps1)
 /// Prints only anonymized conversation text.
 /// </summary>
@@ -46,8 +46,13 @@ internal static class Program
         Console.WriteLine($"Config   : model={settings.Llm.Model} device={settings.Llm.Device} context={settings.Llm.ContextTokens}");
 
         OfflineTests.Run(t, settings);
-        if (args.Contains("--offline")) t.Info("Online (LLM) tests skipped: --offline");
-        else await OnlineTests.RunAsync(t, settings, Arg(args, "--export"));
+        SpeechTests.Offline(t);
+        if (args.Contains("--offline")) t.Info("Online (LLM + Whisper) tests skipped: --offline");
+        else
+        {
+            if (!args.Contains("--speech-only")) await OnlineTests.RunAsync(t, settings, Arg(args, "--export"));
+            if (settings.Speech.Enabled) await SpeechTests.OnlineAsync(t, settings.Speech);
+        }
 
         AppLog.Info($"Self-test finished: {t.Passed} passed, {t.Failed} failed");
         return t.Summary();

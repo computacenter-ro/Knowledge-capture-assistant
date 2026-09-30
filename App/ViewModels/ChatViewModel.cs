@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KnowledgeCapture.Core.Models;
 using KnowledgeCapture.Core.Services;
+using KnowledgeCapture.Core.Services.Speech;
 using Microsoft.UI.Dispatching;
 
 namespace KnowledgeCapture.ViewModels;
@@ -34,7 +35,7 @@ public partial class ChatViewModel : ObservableObject
     public partial string Input { get; set; } = "";
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CanType), nameof(CanStartNew))]
-    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand), nameof(NewConversationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand), nameof(NewConversationCommand), nameof(ToggleRecordingCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty] public partial string Stats { get; set; } = "";
@@ -52,13 +53,13 @@ public partial class ChatViewModel : ObservableObject
     [ObservableProperty] public partial string CoverageText { get; set; } = "0 of 7";
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsEmpty), nameof(CanType))]
-    [NotifyCanExecuteChangedFor(nameof(RunCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(ToggleRecordingCommand))]
     public partial bool HasSession { get; set; }
 
     public bool HasError => !string.IsNullOrEmpty(Error);
     public bool IsEmpty => !HasSession;
     public bool CanType => HasSession && !IsBusy;
-    public bool CanStartNew => !IsBusy;
+    public bool CanStartNew => !IsBusy && !IsVoiceActive;
     public string InputCounter => $"{Input.Length} / {MaxInputChars}";
 
     public string StorageTitle => StoreEnabled ? "Stored anonymized, on this PC" : "Memory only";
@@ -70,6 +71,14 @@ public partial class ChatViewModel : ObservableObject
     public ChatViewModel()
     {
         SelectedTopic = Topics.FirstOrDefault() ?? "My role and daily work";
+        SelectedVoiceLanguage = VoiceLanguages.FirstOrDefault(l => l.Code.Equals(AppHost.Settings.Speech.Language, StringComparison.OrdinalIgnoreCase))
+            ?? VoiceLanguages[0];
+        _mic.LevelChanged += peak => _dq.TryEnqueue(() => { if (IsRecording) MicLevel = LevelPercent(peak); });
+        Shell.SpeechReadyChanged += () => _dq.TryEnqueue(() =>
+        {
+            ToggleRecordingCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(SpeakTooltip));
+        });
         StoreEnabled = AppHost.Store.StoreEnabled;
         Shell.Ready += () => _dq.TryEnqueue(async () =>
         {
@@ -109,7 +118,7 @@ public partial class ChatViewModel : ObservableObject
         }
     }
 
-    private bool CanRun() => Shell.IsReady && HasSession && !IsBusy;
+    private bool CanRun() => Shell.IsReady && HasSession && !IsBusy && !IsVoiceActive;
 
     [RelayCommand(CanExecute = nameof(CanRun))]
     private async Task RunAsync()
@@ -137,10 +146,22 @@ public partial class ChatViewModel : ObservableObject
         }
     }
 
-    private bool CanStop() => IsBusy;
+    private bool CanStop() => IsBusy || IsVoiceActive;
 
+    /// <summary>Stops the reply stream, a transcription, or throws a running recording away.</summary>
     [RelayCommand(CanExecute = nameof(CanStop))]
-    private void Stop() => _cts?.Cancel();
+    private void Stop()
+    {
+        _cts?.Cancel();
+        _speechCts?.Cancel();
+        if (!IsRecording) return;
+        _micTimer?.Stop();
+        _mic.Cancel();
+        IsRecording = false;
+        MicLevel = 0;
+        VoiceStatus = "";
+        Stats = "Recording discarded.";
+    }
 
     [RelayCommand]
     private void FillExample(string index)
@@ -151,7 +172,7 @@ public partial class ChatViewModel : ObservableObject
     [RelayCommand]
     private async Task OpenConversationAsync(ConversationItem? item)
     {
-        if (item is null || IsBusy || item.Id == _session?.Id) return;
+        if (item is null || IsBusy || IsVoiceActive || item.Id == _session?.Id) return;
         var stored = AppHost.Store.Load(item.Id);
         if (stored is null) { Error = "That conversation could not be loaded."; return; }
         await CloseSessionAsync();
@@ -184,6 +205,134 @@ public partial class ChatViewModel : ObservableObject
                 c.CoveragePercent,
                 string.Join(" · ", c.EntityCounts.OrderByDescending(kv => kv.Value).Take(3).Select(kv => $"{kv.Value} {kv.Key}"))));
     }
+
+    // ================================================================= voice answers (Whisper on this PC)
+
+    private readonly MicRecorder _mic = new();
+    private DispatcherQueueTimer? _micTimer;
+    private CancellationTokenSource? _speechCts;
+
+    public IReadOnlyList<VoiceLanguage> VoiceLanguages { get; } =
+        [new("auto", "Auto-detect"), new("en", "English"), new("ro", "Română")];
+    [ObservableProperty] public partial VoiceLanguage SelectedVoiceLanguage { get; set; }
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsVoiceActive), nameof(CanStartNew), nameof(SpeakLabel), nameof(SpeakGlyph), nameof(SpeakTooltip))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleRecordingCommand), nameof(RunCommand), nameof(StopCommand), nameof(NewConversationCommand))]
+    public partial bool IsRecording { get; set; }
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsVoiceActive), nameof(CanStartNew))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleRecordingCommand), nameof(RunCommand), nameof(StopCommand), nameof(NewConversationCommand))]
+    public partial bool IsTranscribing { get; set; }
+
+    /// <summary>Microphone level 0..100 (dB scale) for the meter while recording.</summary>
+    [ObservableProperty] public partial double MicLevel { get; set; }
+    [ObservableProperty] public partial string VoiceStatus { get; set; } = "";
+
+    /// <summary>Raised when a transcript was added to <see cref="Input"/> (the view focuses the box for review).</summary>
+    public event Action? TranscriptReady;
+
+    public bool ShowVoice => Shell.SpeechEnabled;
+    public bool IsVoiceActive => IsRecording || IsTranscribing;
+    public string SpeakLabel => IsRecording ? "Done" : "Speak";
+    public string SpeakGlyph => IsRecording ? "" : ""; // CheckMark / Microphone
+    public string SpeakTooltip =>
+        IsRecording ? "Finish and turn your answer into text (Ctrl+M). Stop throws the recording away."
+        : Shell.IsSpeechReady ? $"Answer by voice (Ctrl+M). Transcribed on this PC by {AppHost.Speech.ShortModelName}; the audio is never stored."
+        : Shell.SpeechError ?? "Loading the Whisper speech model…";
+    private int MaxRecordSeconds => Math.Max(5, AppHost.Settings.Speech.MaxSeconds);
+
+    private bool CanToggleRecording() => IsRecording || (Shell.IsSpeechReady && HasSession && !IsBusy && !IsTranscribing);
+
+    [RelayCommand(CanExecute = nameof(CanToggleRecording))]
+    private async Task ToggleRecordingAsync()
+    {
+        if (IsRecording) { await FinishRecordingAsync(); return; }
+        Error = null;
+        try { _mic.Start(); }
+        catch (MicrophoneException ex) { Error = ex.Message; return; }
+        MicLevel = 0;
+        IsRecording = true;
+        VoiceStatus = $"Listening… 0:00 / {MaxRecordSeconds / 60}:{MaxRecordSeconds % 60:00}";
+        if (_micTimer is null)
+        {
+            _micTimer = _dq.CreateTimer();
+            _micTimer.Interval = TimeSpan.FromMilliseconds(250);
+            _micTimer.Tick += async (_, _) =>
+            {
+                if (!IsRecording) return;
+                var s = (int)_mic.Seconds;
+                VoiceStatus = $"Listening… {s / 60}:{s % 60:00} / {MaxRecordSeconds / 60}:{MaxRecordSeconds % 60:00}";
+                if (s >= MaxRecordSeconds) await FinishRecordingAsync();
+            };
+        }
+        _micTimer.Start();
+    }
+
+    private async Task FinishRecordingAsync()
+    {
+        if (!IsRecording) return;
+        _micTimer?.Stop();
+        short[] samples;
+        try
+        {
+            samples = await _mic.StopAsync();
+        }
+        catch (MicrophoneException ex)
+        {
+            Error = ex.Message;
+            return;
+        }
+        finally
+        {
+            IsRecording = false;
+            MicLevel = 0;
+            VoiceStatus = "";
+        }
+        if (samples.Length < MicRecorder.SampleRate / 4) return; // a double click, not an answer
+
+        var session = _session;
+        var seconds = samples.Length / (double)MicRecorder.SampleRate;
+        IsTranscribing = true;
+        VoiceStatus = $"Turning {seconds:0} s of speech into text on the {AppHost.Speech.Device}…";
+        _speechCts = new CancellationTokenSource();
+        var ct = _speechCts.Token;
+        try
+        {
+            var r = await Task.Run(() => AppHost.Speech.TranscribeAsync(samples, MicRecorder.SampleRate, SelectedVoiceLanguage.Code, ct), ct);
+            if (_session != session) return;
+            if (r.NoSpeech)
+            {
+                Error = "No speech was picked up. Speak a little closer to the microphone and try again, or type your answer.";
+                return;
+            }
+            Input = string.IsNullOrWhiteSpace(Input) ? r.Text : Input.TrimEnd() + " " + r.Text;
+            Stats = $"Voice: {r.AudioSeconds:0.0} s of speech → text in {r.ElapsedSeconds:0.0} s · {AppHost.Speech.ShortModelName} on {AppHost.Speech.Device} · check it, then Send";
+            TranscriptReady?.Invoke();
+        }
+        catch (OperationCanceledException)
+        {
+            Stats = "Transcription stopped.";
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("transcribe", ex);
+            Error = ex is InvalidOperationException
+                ? ex.Message // written by us, no user text
+                : "The speech model did not answer. Try again, or type your answer.";
+        }
+        finally
+        {
+            Array.Clear(samples);
+            IsTranscribing = false;
+            VoiceStatus = "";
+            _speechCts.Dispose();
+            _speechCts = null;
+        }
+    }
+
+    /// <summary>Peak 0..1 → meter 0..100 on a -50..0 dBFS scale (speech then fills the meter visibly).</summary>
+    private static double LevelPercent(double peak) =>
+        peak <= 0 ? 0 : Math.Clamp((20 * Math.Log10(peak) + 50) * 2, 0, 100);
 
     // ================================================================= plumbing
 

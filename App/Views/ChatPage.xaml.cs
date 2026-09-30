@@ -17,6 +17,12 @@ public sealed partial class ChatPage : Page
         InitializeComponent();
         // keep the newest message in view while tokens stream in
         ViewModel.Messages.CollectionChanged += OnMessagesChanged;
+        // a voice answer landed in the box: focus it with the caret at the end, ready for a quick review
+        ViewModel.TranscriptReady += () =>
+        {
+            InputBox.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+            InputBox.Select(InputBox.Text.Length, 0);
+        };
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)

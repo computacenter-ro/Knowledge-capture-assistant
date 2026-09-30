@@ -31,6 +31,9 @@ public static class Bind
         _ => "SystemFillColorCautionBrush",
     });
 
+    public static Brush RecordBrush(bool recording) => Res(recording ? "SystemFillColorCriticalBrush" : "ButtonBackground");
+    public static Brush RecordForeground(bool recording) => Res(recording ? "TextOnAccentFillColorPrimaryBrush" : "ButtonForeground");
+
     public static InfoBarSeverity StorageSeverity(bool warning) => warning ? InfoBarSeverity.Warning : InfoBarSeverity.Informational;
     public static InfoBarSeverity ResultSeverity(bool error) => error ? InfoBarSeverity.Error : InfoBarSeverity.Success;
 }

@@ -21,6 +21,11 @@ public static class DataPaths
 
     public static string Database => Path.Combine(Root, "knowledge.db");
     public static string Logs => Path.Combine(Root, "logs");
+    /// <summary>
+    /// Short-lived WAV pieces handed to Whisper; wiped right after each transcription and at startup. Under %TEMP% on
+    /// purpose: Foundry Local is an MSIX app and does not see files in %LOCALAPPDATA% (its AppData view is virtualized).
+    /// </summary>
+    public static string AudioTemp => Path.Combine(Path.GetTempPath(), "KnowledgeCapture-audio");
     private static string SaltFile => Path.Combine(Root, "identity.salt");
 
     /// <summary>

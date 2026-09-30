@@ -7,6 +7,7 @@ public sealed class AppSettings
     public LlmSettings Llm { get; set; } = new();
     public InterviewSettings Interview { get; set; } = new();
     public AnonymizationSettings Anonymization { get; set; } = new();
+    public SpeechSettings Speech { get; set; } = new();
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -64,4 +65,18 @@ public sealed class AnonymizationSettings
     public bool CapitalizedNameFallback { get; set; } = true;
     /// <summary>Max characters per LLM recognizer call; small models find more entities in short chunks.</summary>
     public int NerChunkChars { get; set; } = 350;
+}
+
+public sealed class SpeechSettings
+{
+    /// <summary>Voice answers (microphone → Whisper via Foundry Local). Off = the mic button is hidden.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Whisper alias or variant id in the Foundry cache (whisper-tiny | whisper-base | whisper-small | …).</summary>
+    public string Model { get; set; } = "whisper-small";
+    /// <summary>Default spoken language: "auto" (Whisper detects it), "en", "ro", … (ISO 639-1). Changeable in the UI.</summary>
+    public string Language { get; set; } = "auto";
+    /// <summary>A recording stops by itself after this many seconds (answers are capped by the NPU prompt limit anyway).</summary>
+    public int MaxSeconds { get; set; } = 90;
+    /// <summary>Whisper hears 30 s at a time: longer recordings are split at quiet points into pieces of at most this length.</summary>
+    public int ChunkSeconds { get; set; } = 28;
 }

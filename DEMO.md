@@ -31,6 +31,12 @@ or the cloud.
 If time allows: toggle **Store anonymized → Memory only** to show the opt-out, or open an older conversation to show the
 "Resumed conversation" notice and fresh placeholder numbering.
 
+**Voice variant (swap in for 0:30, ~15 s):** click **Speak** (or Ctrl+M), say an answer out loud, e.g. *"Every Monday
+I check the open tickets in ServiceNow, and if one is older than three days I escalate it to my team lead"*, click
+**Done**. Say: "Whisper turns speech into text right here on the CPU. The recording stays in memory, never on disk. I can
+fix a word, then Send, and it's anonymized like anything typed." The footer shows e.g. *5 s of speech → text in 2 s*.
+Check the second title-bar pill (**● CPU · whisper-small**) before presenting, and do one test recording in the room.
+
 ## 3 sample inputs (the example buttons)
 
 1. **Daily work (EN)** — "I'm Andrei Ionescu, team lead in Accounts Payable for the Contoso account in Cluj-Napoca. My goal is
@@ -56,5 +62,6 @@ All values are synthetic (fake people; checksum-valid test CNP/IBAN/CUI/card).
   that *is* the point ("it anonymizes before saving"); wait 5-10 s before the next click.
 * **Runtime down** (red pill): click **Retry** in the InfoBar; if Foundry is stuck, run `foundry server restart` and
   `foundry model load phi-4-mini-instruct-openvino-npu:1`, then Retry. Your typed answer stays in the box.
+* **Voice misbehaves** (noisy room, mic blocked): skip it and use the example buttons; the typed flow is identical.
 * **No NPU at all:** show the **Stored data** page of an earlier run and the `leakcheck.ps1` output (0 matches) instead of
   a live interview.

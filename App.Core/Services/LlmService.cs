@@ -87,7 +87,7 @@ public sealed class LlmService
         {
             // Foundry 0.10 does not load cached models on demand: load explicitly, then retry once.
             AppLog.Warn($"Warm-up failed ({ex.GetType().Name}); loading {Model} via foundry CLI");
-            var (code, _) = await RunCliAsync($"model load {Model}", TimeSpan.FromMinutes(10), ct);
+            var (code, _) = await FoundryCli.RunAsync($"model load {Model}", TimeSpan.FromMinutes(10), ct);
             if (code != 0) throw new InvalidOperationException($"Could not load {Model} on the {Device}. Run: foundry model load {Model}");
             await WarmUpAsync(chat, ct);
         }
@@ -260,7 +260,7 @@ public sealed class LlmService
         if (candidate is null) return null;
         progress?.Report($"Loading {candidate.Id} on {DeviceOf(candidate.Id + " " + candidate.Device)} (first load can take a minute)…");
         AppLog.Info($"Loading cached model {candidate.Id} via foundry CLI");
-        var (code, _) = await RunCliAsync($"model load {candidate.Id}", TimeSpan.FromMinutes(10), ct);
+        var (code, _) = await FoundryCli.RunAsync($"model load {candidate.Id}", TimeSpan.FromMinutes(10), ct);
         if (code != 0)
             throw new InvalidOperationException($"Foundry could not load {candidate.Id} on the {device.ToUpperInvariant()}. Run: foundry model load {candidate.Id}");
         return candidate;
@@ -268,7 +268,7 @@ public sealed class LlmService
 
     private static async Task<List<ModelInfo>?> FoundryModelsAsync(string args, CancellationToken ct)
     {
-        var (code, output) = await RunCliAsync(args, TimeSpan.FromMinutes(2), ct);
+        var (code, output) = await FoundryCli.RunAsync(args, TimeSpan.FromMinutes(2), ct);
         var block = code == 0 ? JsonHelpers.ExtractFirst(output, '{', '}') : null;
         if (block is null) return null;
         try
@@ -348,18 +348,18 @@ public sealed class LlmService
         for (var attempt = 0; attempt < 2; attempt++)
         {
             // Foundry Local 0.10+: `foundry server status -o json` -> {"running":true,"webUrls":["http://127.0.0.1:PORT"]}
-            var (code, json) = await RunCliAsync("server status -o json", TimeSpan.FromSeconds(60), ct);
+            var (code, json) = await FoundryCli.RunAsync("server status -o json", TimeSpan.FromSeconds(60), ct);
             if (code == 0 && TryParseServerJson(json) is { } url) return url + "/v1";
             // Foundry Local 0.7-0.9: `foundry service status` prints the endpoint
-            var (_, text) = await RunCliAsync("service status", TimeSpan.FromSeconds(60), ct);
+            var (_, text) = await FoundryCli.RunAsync("service status", TimeSpan.FromSeconds(60), ct);
             var m = LocalUrl.Match(text);
             if (m.Success && !text.Contains("not running", StringComparison.OrdinalIgnoreCase)) return m.Value + "/v1";
 
             if (attempt == 0)
             {
                 AppLog.Info("Foundry service not running; starting it");
-                var (startCode, _) = await RunCliAsync("server start", TimeSpan.FromMinutes(3), ct);
-                if (startCode != 0) await RunCliAsync("service start", TimeSpan.FromMinutes(3), ct);
+                var (startCode, _) = await FoundryCli.RunAsync("server start", TimeSpan.FromMinutes(3), ct);
+                if (startCode != 0) await FoundryCli.RunAsync("service start", TimeSpan.FromMinutes(3), ct);
             }
         }
         throw new InvalidOperationException("Foundry Local is not running. Run: foundry server start (then: foundry model load <npu model id>)");
@@ -380,30 +380,6 @@ public sealed class LlmService
         }
         catch (JsonException) { }
         return null;
-    }
-
-    private static async Task<(int Code, string Output)> RunCliAsync(string args, TimeSpan timeout, CancellationToken ct)
-    {
-        var psi = new ProcessStartInfo("foundry", args)
-        {
-            RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
-        };
-        try
-        {
-            using var p = Process.Start(psi)!;
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(timeout);
-            var stdout = p.StandardOutput.ReadToEndAsync(cts.Token);
-            var stderr = p.StandardError.ReadToEndAsync(cts.Token);
-            try { await p.WaitForExitAsync(cts.Token); }
-            catch (OperationCanceledException) { try { p.Kill(true); } catch { } ct.ThrowIfCancellationRequested(); return (-1, ""); }
-            return (p.ExitCode, await stdout + "\n" + await stderr);
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            return (-2, ""); // foundry CLI not installed
-        }
     }
 
     /// <summary>Hard guard: this app only ever talks to a model on this machine.</summary>

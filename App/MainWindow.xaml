@@ -19,10 +19,21 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <FontIcon Glyph="&#xE8F2;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" />
             <TextBlock Grid.Column="1" Text="Knowledge Capture" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
             <Border Grid.Column="3" VerticalAlignment="Center" CornerRadius="12" Padding="10,4" BorderThickness="1"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Visibility="{x:Bind v:Bind.Visible(Shell.SpeechEnabled)}"
+                    ToolTipService.ToolTip="Voice answers: Whisper speech-to-text via Foundry Local. The audio never leaves this PC and is never stored.">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="{x:Bind v:Bind.StatusBrush(Shell.SpeechStatus), Mode=OneWay}" />
+                    <FontIcon Glyph="&#xE720;" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Text="{x:Bind Shell.SpeechStatusText, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="4" VerticalAlignment="Center" CornerRadius="12" Padding="10,4" BorderThickness="1"
                     Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     ToolTipService.ToolTip="All inference runs locally via Foundry Local. Nothing leaves this PC.">
                 <StackPanel Orientation="Horizontal" Spacing="8">

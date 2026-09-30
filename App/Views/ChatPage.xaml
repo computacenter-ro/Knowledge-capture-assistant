@@ -93,6 +93,12 @@
                 </InfoBar>
                 <InfoBar IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}" Severity="Warning" Title="Heads up"
                          Message="{x:Bind ViewModel.Error, Mode=OneWay}" />
+                <InfoBar IsOpen="{x:Bind ViewModel.Shell.HasSpeechError, Mode=OneWay}" Severity="Informational" Title="Voice answers unavailable"
+                         Message="{x:Bind ViewModel.Shell.SpeechError, Mode=OneWay}">
+                    <InfoBar.ActionButton>
+                        <Button Content="Retry" Command="{x:Bind ViewModel.Shell.InitSpeechCommand}" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
                 <InfoBar IsOpen="{x:Bind ViewModel.IsResumed, Mode=OneWay}" Severity="Informational" Title="Resumed conversation"
                          Message="You are seeing the stored, anonymized text. The original names and details were never saved, so anything new gets fresh placeholders." />
                 <InfoBar IsOpen="True" IsClosable="False" Severity="{x:Bind v:Bind.StorageSeverity(ViewModel.StorageIsWarning), Mode=OneWay}"
@@ -132,12 +138,26 @@
                 </StackPanel>
             </Grid>
 
-            <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Try an example:" Style="{StaticResource SecondaryCaption}" VerticalAlignment="Center" />
-                <Button Content="{x:Bind ViewModel.Example1Label}" Command="{x:Bind ViewModel.FillExampleCommand}" CommandParameter="0" IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}" />
-                <Button Content="{x:Bind ViewModel.Example2Label}" Command="{x:Bind ViewModel.FillExampleCommand}" CommandParameter="1" IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}" />
-                <Button Content="{x:Bind ViewModel.Example3Label}" Command="{x:Bind ViewModel.FillExampleCommand}" CommandParameter="2" IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}" />
-            </StackPanel>
+            <Grid Grid.Row="3" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Try an example:" Style="{StaticResource SecondaryCaption}" VerticalAlignment="Center" />
+                    <Button Content="{x:Bind ViewModel.Example1Label}" Command="{x:Bind ViewModel.FillExampleCommand}" CommandParameter="0" IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}" />
+                    <Button Content="{x:Bind ViewModel.Example2Label}" Command="{x:Bind ViewModel.FillExampleCommand}" CommandParameter="1" IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}" />
+                    <Button Content="{x:Bind ViewModel.Example3Label}" Command="{x:Bind ViewModel.FillExampleCommand}" CommandParameter="2" IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Visibility="{x:Bind v:Bind.Visible(ViewModel.ShowVoice)}">
+                    <FontIcon Glyph="&#xE720;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                    <ComboBox MinWidth="130" AutomationProperties.Name="Spoken language"
+                              ToolTipService.ToolTip="Language you speak in (Whisper). Auto-detect works for most answers."
+                              ItemsSource="{x:Bind ViewModel.VoiceLanguages}"
+                              SelectedItem="{x:Bind ViewModel.SelectedVoiceLanguage, Mode=TwoWay}"
+                              IsEnabled="{x:Bind v:Bind.Not(ViewModel.IsVoiceActive), Mode=OneWay}" />
+                </StackPanel>
+            </Grid>
 
             <Grid Grid.Row="4" ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
@@ -151,6 +171,20 @@
                          IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}"
                          PreviewKeyDown="InputBox_PreviewKeyDown" />
                 <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Bottom">
+                    <Button MinWidth="100" AutomationProperties.Name="{x:Bind ViewModel.SpeakLabel, Mode=OneWay}"
+                            Command="{x:Bind ViewModel.ToggleRecordingCommand}"
+                            Visibility="{x:Bind v:Bind.Visible(ViewModel.ShowVoice)}"
+                            Background="{x:Bind v:Bind.RecordBrush(ViewModel.IsRecording), Mode=OneWay}"
+                            Foreground="{x:Bind v:Bind.RecordForeground(ViewModel.IsRecording), Mode=OneWay}"
+                            ToolTipService.ToolTip="{x:Bind ViewModel.SpeakTooltip, Mode=OneWay}">
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="M" />
+                        </Button.KeyboardAccelerators>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="{x:Bind ViewModel.SpeakGlyph, Mode=OneWay}" FontSize="14" />
+                            <TextBlock Text="{x:Bind ViewModel.SpeakLabel, Mode=OneWay}" />
+                        </StackPanel>
+                    </Button>
                     <Button Style="{StaticResource AccentButtonStyle}" MinWidth="100" AutomationProperties.Name="Send" Command="{x:Bind ViewModel.RunCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE724;" FontSize="14" />
@@ -169,7 +203,19 @@
             <Grid Grid.Row="5">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="14" Height="14" />
-                    <TextBlock Text="{x:Bind ViewModel.Stats, Mode=OneWay}" Style="{StaticResource SecondaryCaption}" VerticalAlignment="Center" />
+                    <TextBlock Text="{x:Bind ViewModel.Stats, Mode=OneWay}" Style="{StaticResource SecondaryCaption}" VerticalAlignment="Center"
+                               Visibility="{x:Bind v:Bind.Collapsed(ViewModel.IsVoiceActive), Mode=OneWay}" />
+                </StackPanel>
+                <!-- voice: listening (red dot + timer + level meter) / transcribing (ring) -->
+                <StackPanel Orientation="Horizontal" Spacing="8" Visibility="{x:Bind v:Bind.Visible(ViewModel.IsVoiceActive), Mode=OneWay}">
+                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{ThemeResource SystemFillColorCriticalBrush}"
+                             Visibility="{x:Bind v:Bind.Visible(ViewModel.IsRecording), Mode=OneWay}" />
+                    <ProgressRing IsActive="{x:Bind ViewModel.IsTranscribing, Mode=OneWay}" Width="14" Height="14"
+                                  Visibility="{x:Bind v:Bind.Visible(ViewModel.IsTranscribing), Mode=OneWay}" />
+                    <TextBlock Text="{x:Bind ViewModel.VoiceStatus, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
+                    <ProgressBar Width="140" Maximum="100" VerticalAlignment="Center" AutomationProperties.Name="Microphone level"
+                                 Value="{x:Bind ViewModel.MicLevel, Mode=OneWay}"
+                                 Visibility="{x:Bind v:Bind.Visible(ViewModel.IsRecording), Mode=OneWay}" />
                 </StackPanel>
                 <TextBlock Text="{x:Bind ViewModel.InputCounter, Mode=OneWay}" Style="{StaticResource SecondaryCaption}" HorizontalAlignment="Right" />
             </Grid>

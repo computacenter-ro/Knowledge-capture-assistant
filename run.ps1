@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Starts Foundry Local, makes sure an NPU model is loaded, then runs the Knowledge Capture app.
+  Starts Foundry Local, makes sure an NPU model (chat) and a Whisper model (voice answers) are loaded, then runs the app.
 .EXAMPLE
   .\run.ps1                 # Debug build, native architecture
   .\run.ps1 -Release        # Release build
@@ -9,7 +9,8 @@
 param(
     [switch]$Release,
     [string]$Model = 'phi-4-mini',
-    [string]$Device = 'npu'
+    [string]$Device = 'npu',
+    [string]$SpeechModel = 'whisper-small'   # voice answers; '' skips it
 )
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -48,6 +49,19 @@ if (-not $hit) {
     Write-Host "Model ready: $($hit.id) on $($hit.device)" -ForegroundColor Green
 }
 
-# 3. Build + run (the app discovers the dynamic Foundry port itself)
+# 3. Whisper for voice answers (runs on the CPU; optional: without it Speak stays disabled and the app says why)
+if ($SpeechModel) {
+    $speech = @()
+    try { $speech = @((foundry model list --cached -o json 2>$null | ConvertFrom-Json).models | Where-Object { $_.type -eq 'Speech' }) } catch { }
+    if (-not ($speech | Where-Object { $_.alias -eq $SpeechModel -or $_.id -like "*$SpeechModel*" })) {
+        Write-Host "Downloading speech model $SpeechModel for voice answers..." -ForegroundColor Cyan
+        foundry model download $SpeechModel
+        if ($LASTEXITCODE -ne 0) { Write-Host "Could not download $SpeechModel - voice answers will be unavailable." -ForegroundColor Yellow }
+    }
+    $null = foundry model load $SpeechModel 2>&1
+    if ($LASTEXITCODE -eq 0) { Write-Host "Speech model ready: $SpeechModel (CPU)" -ForegroundColor Green }
+}
+
+# 4. Build + run (the app discovers the dynamic Foundry port itself)
 $config = if ($Release) { 'Release' } else { 'Debug' }
 dotnet run --project App\App.csproj -c $config -p:Platform=$platform

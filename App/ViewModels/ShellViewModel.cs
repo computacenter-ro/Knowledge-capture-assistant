@@ -46,6 +46,7 @@ public partial class ShellViewModel : ObservableObject
             Status = ModelStatus.Ready;
             StatusText = $"{AppHost.Llm.Device} · {AppHost.Llm.ShortModelName}";
             Ready?.Invoke();
+            if (SpeechEnabled && !AppHost.Speech.IsReady) _ = InitSpeechAsync(); // after the chat model, so it never delays it
         }
         catch (Exception ex)
         {
@@ -59,6 +60,48 @@ public partial class ShellViewModel : ObservableObject
         finally
         {
             _initializing = false;
+        }
+    }
+
+    // ---------------------------------------------------------------- speech (Whisper, optional)
+
+    public bool SpeechEnabled => AppHost.Settings.Speech.Enabled;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSpeechReady))]
+    public partial ModelStatus SpeechStatus { get; set; } = ModelStatus.Loading;
+    [ObservableProperty] public partial string SpeechStatusText { get; set; } = "Voice · loading…";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasSpeechError))]
+    public partial string? SpeechError { get; set; }
+    public bool HasSpeechError => !string.IsNullOrEmpty(SpeechError);
+    public bool IsSpeechReady => SpeechStatus == ModelStatus.Ready;
+    public event Action? SpeechReadyChanged;
+
+    private bool _speechInitializing;
+
+    [RelayCommand]
+    public async Task InitSpeechAsync()
+    {
+        if (_speechInitializing || !SpeechEnabled) return;
+        _speechInitializing = true;
+        SpeechStatus = ModelStatus.Loading;
+        SpeechStatusText = "Voice · loading…";
+        SpeechError = null;
+        try
+        {
+            await Task.Run(() => AppHost.Speech.InitAsync(AppHost.Settings.Speech));
+            SpeechStatus = ModelStatus.Ready;
+            SpeechStatusText = $"{AppHost.Speech.Device} · {AppHost.Speech.ShortModelName}";
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("speech init", ex);
+            SpeechStatus = ModelStatus.Down;
+            SpeechStatusText = "Voice · off";
+            SpeechError = ex is InvalidOperationException ? ex.Message : "The Whisper speech model could not be started.";
+        }
+        finally
+        {
+            _speechInitializing = false;
+            SpeechReadyChanged?.Invoke();
         }
     }
 
