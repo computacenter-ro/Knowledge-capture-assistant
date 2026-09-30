@@ -1,0 +1,239 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="KnowledgeCapture.Views.ChatPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:v="using:KnowledgeCapture.Views"
+    xmlns:vm="using:KnowledgeCapture.ViewModels"
+    NavigationCacheMode="Required">
+
+    <Grid Padding="16,4,16,16" ColumnSpacing="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="240" />
+            <ColumnDefinition Width="*" MinWidth="380" />
+            <ColumnDefinition Width="360" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============ left: conversations ============ -->
+        <Grid RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Conversations" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <Border Grid.Row="1" Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="10">
+                    <ComboBox Header="Interview topic" HorizontalAlignment="Stretch"
+                              ItemsSource="{x:Bind ViewModel.Topics}"
+                              SelectedItem="{x:Bind ViewModel.SelectedTopic, Mode=TwoWay}" />
+                    <Button Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"
+                            AutomationProperties.Name="New conversation"
+                            Command="{x:Bind ViewModel.NewConversationCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE710;" FontSize="14" />
+                            <TextBlock Text="New conversation" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+            <ListView Grid.Row="2" ItemsSource="{x:Bind ViewModel.Conversations}" SelectionMode="None"
+                      IsItemClickEnabled="True" ItemClick="Conversation_ItemClick"
+                      ItemContainerStyle="{StaticResource StretchListItem}">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ConversationItem">
+                        <StackPanel Padding="0,8" Spacing="2">
+                            <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{x:Bind Subtitle}" Style="{StaticResource SecondaryCaption}" />
+                            <ProgressBar Value="{x:Bind CoveragePercent}" Maximum="100" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+
+        <!-- ============ center: interview ============ -->
+        <Grid Grid.Column="1" RowSpacing="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{x:Bind ViewModel.ConversationTitle, Mode=OneWay}" Style="{StaticResource TitleTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{x:Bind ViewModel.ConversationSubtitle, Mode=OneWay}" Style="{StaticResource SecondaryCaption}" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" MinWidth="0"
+                              OnContent="Store anonymized" OffContent="Memory only"
+                              IsOn="{x:Bind ViewModel.StoreEnabled, Mode=TwoWay}"
+                              ToolTipService.ToolTip="Opt out: when off, nothing from the conversation is saved." />
+            </Grid>
+
+            <StackPanel Grid.Row="1" Spacing="8">
+                <InfoBar IsOpen="{x:Bind ViewModel.Shell.IsLoading, Mode=OneWay}" IsClosable="False" Severity="Informational"
+                         Title="Starting the local model" Message="{x:Bind ViewModel.Shell.LoadingText, Mode=OneWay}">
+                    <InfoBar.Content>
+                        <ProgressBar IsIndeterminate="True" Margin="0,0,0,12" />
+                    </InfoBar.Content>
+                </InfoBar>
+                <InfoBar IsOpen="{x:Bind ViewModel.Shell.HasInitError, Mode=OneWay}" IsClosable="False" Severity="Error"
+                         Title="Local model unavailable" Message="{x:Bind ViewModel.Shell.InitError, Mode=OneWay}">
+                    <InfoBar.ActionButton>
+                        <Button Content="Retry" Command="{x:Bind ViewModel.Shell.InitCommand}" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
+                <InfoBar IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}" Severity="Warning" Title="Heads up"
+                         Message="{x:Bind ViewModel.Error, Mode=OneWay}" />
+                <InfoBar IsOpen="{x:Bind ViewModel.IsResumed, Mode=OneWay}" Severity="Informational" Title="Resumed conversation"
+                         Message="You are seeing the stored, anonymized text. The original names and details were never saved, so anything new gets fresh placeholders." />
+                <InfoBar IsOpen="True" IsClosable="False" Severity="{x:Bind v:Bind.StorageSeverity(ViewModel.StorageIsWarning), Mode=OneWay}"
+                         Title="{x:Bind ViewModel.StorageTitle, Mode=OneWay}" Message="{x:Bind ViewModel.StorageMessage, Mode=OneWay}" />
+            </StackPanel>
+
+            <Grid Grid.Row="2">
+                <ListView x:Name="MessageList" ItemsSource="{x:Bind ViewModel.Messages}" SelectionMode="None" Padding="0,4">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="4,0" />
+                            <Setter Property="Margin" Value="0,4" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MessageItem">
+                            <StackPanel HorizontalAlignment="{x:Bind v:Bind.Align(IsUser)}" MaxWidth="600" Spacing="2">
+                                <Border CornerRadius="8" Padding="12,8" BorderThickness="1"
+                                        Background="{x:Bind v:Bind.BubbleBrush(IsUser)}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <TextBlock Text="{x:Bind Text, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                               Foreground="{x:Bind v:Bind.BubbleForeground(IsUser)}" />
+                                </Border>
+                                <TextBlock Text="{x:Bind Badge, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                           HorizontalAlignment="{x:Bind v:Bind.Align(IsUser)}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8"
+                            Visibility="{x:Bind v:Bind.Visible(ViewModel.IsEmpty), Mode=OneWay}">
+                    <FontIcon Glyph="&#xE8BD;" FontSize="40" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Text="Pick a topic and start a new conversation" Style="{StaticResource BodyStrongTextBlockStyle}" HorizontalAlignment="Center" />
+                    <TextBlock Text="The assistant asks one question at a time and captures how you work." Style="{StaticResource SecondaryCaption}" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Try an example:" Style="{StaticResource SecondaryCaption}" VerticalAlignment="Center" />
+                <Button Content="{x:Bind ViewModel.Example1Label}" Command="{x:Bind ViewModel.FillExampleCommand}" CommandParameter="0" IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}" />
+                <Button Content="{x:Bind ViewModel.Example2Label}" Command="{x:Bind ViewModel.FillExampleCommand}" CommandParameter="1" IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}" />
+                <Button Content="{x:Bind ViewModel.Example3Label}" Command="{x:Bind ViewModel.FillExampleCommand}" CommandParameter="2" IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}" />
+            </StackPanel>
+
+            <Grid Grid.Row="4" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="InputBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="84" MaxHeight="180"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         PlaceholderText="Type your answer… (Ctrl+Enter to send)" AutomationProperties.Name="Answer"
+                         Text="{x:Bind ViewModel.Input, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{x:Bind ViewModel.CanType, Mode=OneWay}"
+                         PreviewKeyDown="InputBox_PreviewKeyDown" />
+                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Bottom">
+                    <Button Style="{StaticResource AccentButtonStyle}" MinWidth="100" AutomationProperties.Name="Send" Command="{x:Bind ViewModel.RunCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE724;" FontSize="14" />
+                            <TextBlock Text="Send" />
+                        </StackPanel>
+                    </Button>
+                    <Button MinWidth="100" AutomationProperties.Name="Stop" Command="{x:Bind ViewModel.StopCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE71A;" FontSize="14" />
+                            <TextBlock Text="Stop" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="5">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="14" Height="14" />
+                    <TextBlock Text="{x:Bind ViewModel.Stats, Mode=OneWay}" Style="{StaticResource SecondaryCaption}" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Text="{x:Bind ViewModel.InputCounter, Mode=OneWay}" Style="{StaticResource SecondaryCaption}" HorizontalAlignment="Right" />
+            </Grid>
+        </Grid>
+
+        <!-- ============ right: coverage + what gets stored ============ -->
+        <Grid Grid.Column="2" RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="10">
+                    <Grid>
+                        <TextBlock Text="Knowledge coverage" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind ViewModel.CoverageText, Mode=OneWay}" Style="{StaticResource SecondaryCaption}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    </Grid>
+                    <ProgressBar Value="{x:Bind ViewModel.CoveragePercent, Mode=OneWay}" Maximum="100" />
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.SlotItems}">
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SlotItem">
+                                <StackPanel Orientation="Horizontal" Spacing="10" Padding="0,3">
+                                    <FontIcon FontSize="16" Glyph="{x:Bind v:Bind.SlotGlyph(IsCovered), Mode=OneWay}"
+                                              Foreground="{x:Bind v:Bind.SlotBrush(IsCovered), Mode=OneWay}" />
+                                    <TextBlock Text="{x:Bind Title}" Opacity="{x:Bind v:Bind.SlotOpacity(IsCovered), Mode=OneWay}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="16,16,8,8">
+                <Grid RowSpacing="6">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE72E;" FontSize="16" />
+                        <TextBlock Text="What gets stored" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="1" Style="{StaticResource SecondaryCaption}" Margin="0,0,8,0"
+                               Text="Anonymized on this device before saving. Highlighted placeholders replace personal data; the mapping is never stored." />
+                    <ListView Grid.Row="2" ItemsSource="{x:Bind ViewModel.StoredItems}" SelectionMode="None"
+                              ItemContainerStyle="{StaticResource StretchListItem}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:StoredItem">
+                                <StackPanel Spacing="4" Padding="0,8">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{x:Bind RoleLabel}" Style="{StaticResource BodyStrongTextBlockStyle}" FontSize="12" />
+                                        <TextBlock Text="{x:Bind State, Mode=OneWay}" Style="{StaticResource SecondaryCaption}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <ProgressBar IsIndeterminate="True" Visibility="{x:Bind v:Bind.Visible(IsPending), Mode=OneWay}" />
+                                    <TextBlock v:Highlight.Text="{x:Bind Text, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True" FontSize="13" />
+                                    <TextBlock Text="{x:Bind Counts, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

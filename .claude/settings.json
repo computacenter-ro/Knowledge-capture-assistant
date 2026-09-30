@@ -1,0 +1,16 @@
+{
+  "model": "opusplan",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(dotnet:*)",
+      "Bash(foundry:*)",
+      "Bash(geniex:*)",
+      "Bash(pwsh:*)",
+      "Bash(git:*)",
+      "PowerShell(dotnet:*)",
+      "PowerShell(foundry:*)",
+      "PowerShell(geniex:*)"
+    ]
+  }
+}

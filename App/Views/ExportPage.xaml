@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="KnowledgeCapture.Views.ExportPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:v="using:KnowledgeCapture.Views">
+
+    <ScrollViewer>
+        <StackPanel Padding="24,4,24,24" Spacing="16" MaxWidth="760" HorizontalAlignment="Left">
+            <StackPanel>
+                <TextBlock Text="Export for fine-tuning" Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Style="{StaticResource SecondaryCaption}"
+                           Text="Chat-format JSONL, one conversation per line: {&quot;messages&quot;:[{&quot;role&quot;,&quot;content&quot;}…], &quot;metadata&quot;:{topic, coverage…}}. System prompts are excluded. Only anonymized text exists to export." />
+            </StackPanel>
+
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Filters" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <CalendarDatePicker Header="From" PlaceholderText="Any date" Date="{x:Bind ViewModel.FromDate, Mode=TwoWay}" />
+                        <CalendarDatePicker Header="To" PlaceholderText="Any date" Date="{x:Bind ViewModel.ToDate, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="24">
+                        <NumberBox Header="Minimum answers (turns)" Minimum="0" Maximum="100" SmallChange="1" Width="200"
+                                   SpinButtonPlacementMode="Inline" Value="{x:Bind ViewModel.MinTurns, Mode=TwoWay}" />
+                        <StackPanel Width="280">
+                            <Slider Header="Minimum coverage (%)" Minimum="0" Maximum="100" StepFrequency="10" TickFrequency="10"
+                                    TickPlacement="BottomRight" Value="{x:Bind ViewModel.MinCoverage, Mode=TwoWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <TextBlock Text="{x:Bind ViewModel.MatchText, Mode=OneWay}" Style="{StaticResource BodyTextBlockStyle}" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Style="{StaticResource AccentButtonStyle}" Click="Export_Click" IsEnabled="{x:Bind ViewModel.HasMatches, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xEDE1;" FontSize="14" />
+                                <TextBlock Text="Export JSONL…" />
+                            </StackPanel>
+                        </Button>
+                        <ProgressRing IsActive="{x:Bind ViewModel.IsExporting, Mode=OneWay}" Width="20" Height="20" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <InfoBar IsOpen="{x:Bind ViewModel.HasResult, Mode=OneWay}" Severity="{x:Bind v:Bind.ResultSeverity(ViewModel.ResultIsError), Mode=OneWay}"
+                     Title="Export" Message="{x:Bind ViewModel.ResultMessage, Mode=OneWay}" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

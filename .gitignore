@@ -1,0 +1,9 @@
+bin/
+obj/
+publish/
+*.user
+.vs/
+# local data never belongs in the repo (it lives in %LOCALAPPDATA%\KnowledgeCapture anyway)
+*.db
+*.db-journal
+*.jsonl

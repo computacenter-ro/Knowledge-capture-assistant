@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="KnowledgeCapture.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:v="using:KnowledgeCapture.Views"
+    Title="Knowledge Capture">
+
+    <Grid x:Name="Root" Loaded="Root_Loaded">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- custom title bar: icon + name + NPU status pill (caption buttons sit on the right) -->
+        <Grid x:Name="AppTitleBar" Padding="16,0,150,0" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <FontIcon Glyph="&#xE8F2;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="Knowledge Capture" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
+            <Border Grid.Column="3" VerticalAlignment="Center" CornerRadius="12" Padding="10,4" BorderThickness="1"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    ToolTipService.ToolTip="All inference runs locally via Foundry Local. Nothing leaves this PC.">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="{x:Bind v:Bind.StatusBrush(Shell.Status), Mode=OneWay}" />
+                    <TextBlock Text="{x:Bind Shell.StatusText, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <NavigationView x:Name="Nav" Grid.Row="1" PaneDisplayMode="LeftCompact" IsSettingsVisible="False"
+                        IsBackButtonVisible="Collapsed" IsPaneToggleButtonVisible="True" OpenPaneLength="200"
+                        SelectionChanged="Nav_SelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Chat" Tag="chat" IsSelected="True">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8BD;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Stored data" Tag="stored">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8F1;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Export" Tag="export">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xEDE1;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
+</Window>
